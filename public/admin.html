@@ -18,10 +18,14 @@
         .score-btns button { background: #0f3460; border: none; color: white; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 18px; margin: 0 3px; }
         .score-btns .plus { background: #2e7d32; }
         .score-btns .minus { background: #c62828; }
-        .question-area textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #0f3460; background: #1a1a2e; color: white; font-size: 18px; resize: vertical; }
-        .btn-primary { background: #1565c0; border: none; color: white; padding: 12px 24px; border-radius: 40px; font-weight: bold; font-size: 18px; cursor: pointer; width: 100%; margin-top: 10px; }
+        .question-area textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #0f3460; background: #1a1a2e; color: white; font-size: 16px; resize: vertical; }
+        .btn-primary { background: #1565c0; border: none; color: white; padding: 12px 24px; border-radius: 40px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 8px; width: 100%; }
         .btn-primary:hover { background: #0d47a1; }
-        .buzz-status { background: #1a1a2e; padding: 20px; border-radius: 8px; text-align: center; margin-top: 15px; border: 2px solid #0f3460; }
+        .btn-success { background: #2e7d32; }
+        .btn-success:hover { background: #1b5e20; }
+        .btn-warning { background: #f57c00; }
+        .btn-warning:hover { background: #e65100; }
+        .buzz-status { background: #1a1a2e; padding: 15px; border-radius: 8px; text-align: center; margin-top: 15px; border: 2px solid #0f3460; }
         .buzz-status .winner { font-size: 24px; font-weight: bold; color: #f5c842; }
         .buzz-status .waiting { color: #aaa; font-size: 18px; }
         .controls { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
@@ -36,9 +40,14 @@
         .action-buttons button { flex: 1; padding: 12px; border-radius: 40px; font-weight: bold; border: none; cursor: pointer; font-size: 16px; }
         .validate-btn { background: #2e7d32; color: white; }
         .reject-btn { background: #c62828; color: white; }
-        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
         .timer-display { font-size: 28px; text-align: center; margin: 10px 0; color: #f5c842; }
         .timer-display .label { font-size: 14px; color: #aaa; }
+        .quiz-controls { border-top: 1px solid #0f3460; padding-top: 15px; margin-top: 15px; }
+        .quiz-controls textarea { width: 100%; height: 120px; margin-bottom: 8px; }
+        .quiz-controls .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .quiz-controls .row select, .quiz-controls .row input { padding: 8px; border-radius: 6px; border: 1px solid #0f3460; background: #1a1a2e; color: white; flex: 1; }
+        .quiz-controls .row label { color: #aaa; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -55,12 +64,32 @@
 
         <!-- Colonne 2: Questions et actions -->
         <div class="card question-area">
-            <h2>Envoyer une question</h2>
-            <textarea id="questionInput" rows="3" placeholder="Tapez votre question..."></textarea>
+            <h2>Envoyer une question (manuel)</h2>
+            <textarea id="questionInput" rows="2" placeholder="Question ..."></textarea>
+            <input type="text" id="answerInput" placeholder="Réponse (optionnelle)" style="width:100%;padding:10px;border-radius:8px;border:1px solid #0f3460;background:#1a1a2e;color:white;margin-top:6px;">
             <button id="sendQuestionBtn" class="btn-primary">Envoyer la question</button>
 
+            <!-- Banque de questions -->
+            <div class="quiz-controls">
+                <h2>Banque de questions</h2>
+                <textarea id="questionsList" placeholder="Une question par ligne :&#10;Question ? | Réponse"></textarea>
+                <div class="row">
+                    <select id="modeSelect">
+                        <option value="successive">Successif</option>
+                        <option value="random">Aléatoire</option>
+                    </select>
+                    <button id="loadQuestionsBtn" class="btn-primary" style="flex:0;">Charger</button>
+                </div>
+                <div class="row" style="margin-top:8px;">
+                    <label><input type="checkbox" id="autoNextCheck" checked> Auto-next</label>
+                    <button id="startQuizBtn" class="btn-success" style="flex:1;">Démarrer le quiz</button>
+                    <button id="nextQuestionBtn" class="btn-warning" style="flex:1;">Question suivante</button>
+                </div>
+                <div style="color:#aaa;font-size:14px;margin-top:6px;" id="quizStatus">Aucune question chargée</div>
+            </div>
+
             <!-- Timer général -->
-            <div class="timer-display" id="generalTimerDisplay">
+            <div class="timer-display">
                 <span class="label">Temps restant</span><br>
                 <span id="generalTimerValue">--</span> s
             </div>
@@ -103,11 +132,11 @@
             <h2>Instructions</h2>
             <ul style="list-style:none;color:#ccc;line-height:2;">
                 <li>1. Les joueurs rejoignent avec le code.</li>
-                <li>2. Tapez une question et envoyez.</li>
-                <li>3. Le premier buzzer apparaît ; choisissez Valider ou Refuser.</li>
-                <li>4. Si Refus, le joueur est exclu pour cette question.</li>
-                <li>5. Le temps de réponse est limité (timer individuel).</li>
-                <li>6. Si personne ne buzz dans le temps imparti, la question est passée.</li>
+                <li>2. Chargez une liste de questions (format: Question | Réponse).</li>
+                <li>3. Choisissez le mode (successif/aléatoire) et cliquez "Démarrer".</li>
+                <li>4. Les questions s'enchaînent automatiquement (ou manuellement).</li>
+                <li>5. Après un buzz, validez ou refusez; la réponse s'affiche.</li>
+                <li>6. Vous pouvez aussi poser des questions manuellement.</li>
             </ul>
         </div>
     </div>

@@ -4,6 +4,7 @@ const roomCodeDisplay = document.getElementById('roomCodeDisplay');
 const playersList = document.getElementById('playersList');
 const playerCount = document.getElementById('playerCount');
 const questionInput = document.getElementById('questionInput');
+const answerInput = document.getElementById('answerInput');
 const sendQuestionBtn = document.getElementById('sendQuestionBtn');
 const resetBuzzerBtn = document.getElementById('resetBuzzerBtn');
 const buzzStatus = document.getElementById('buzzStatus');
@@ -15,6 +16,15 @@ const answerTimeInput = document.getElementById('answerTimeInput');
 const questionTimeInput = document.getElementById('questionTimeInput');
 const applyTimersBtn = document.getElementById('applyTimersBtn');
 const generalTimerValue = document.getElementById('generalTimerValue');
+
+// Éléments banque de questions
+const questionsList = document.getElementById('questionsList');
+const modeSelect = document.getElementById('modeSelect');
+const loadQuestionsBtn = document.getElementById('loadQuestionsBtn');
+const startQuizBtn = document.getElementById('startQuizBtn');
+const nextQuestionBtn = document.getElementById('nextQuestionBtn');
+const autoNextCheck = document.getElementById('autoNextCheck');
+const quizStatus = document.getElementById('quizStatus');
 
 let currentRoomCode = null;
 let currentBuzzerId = null;
@@ -83,13 +93,17 @@ socket.on('timerTick', ({ type, remaining }) => {
     }
 });
 
-// Nouvelle question
-socket.on('newQuestion', ({ question, isLocked, questionTime }) => {
+// Nouvelle question (automatique ou manuelle)
+socket.on('newQuestion', ({ question, isLocked, questionTime, manual }) => {
     buzzAction.style.display = 'none';
     currentBuzzerId = null;
     buzzStatus.innerHTML = `<div class="waiting">Question envoyée. En attente d'un buzzer...</div>`;
     generalTimerValue.textContent = questionTime;
     generalTimerValue.style.color = '#f5c842';
+    if (!manual) {
+        // Si automatique, on met à jour le statut de la banque
+        quizStatus.textContent = `Question en cours (${question})`;
+    }
 });
 
 // Un joueur buzz
@@ -123,42 +137,91 @@ socket.on('questionValidated', ({ winnerName, newScore }) => {
     buzzStatus.innerHTML = `<div class="winner" style="color:#4caf50;">${winnerName} a gagné 1 point (score: ${newScore})</div>`;
 });
 
-// Question timeout (temps général écoulé)
+// Affichage de la réponse
+socket.on('showAnswer', ({ answer, winnerName }) => {
+    let msg = winnerName ? `${winnerName} a répondu : ` : 'La réponse était : ';
+    buzzStatus.innerHTML = `<div class="winner" style="color:#f5c842;">${msg} ${answer}</div>`;
+});
+
+// Question timeout
 socket.on('questionTimeout', () => {
     buzzAction.style.display = 'none';
     buzzStatus.innerHTML = `<div class="waiting" style="color:#e53935;">Temps écoulé. Personne n'a répondu.</div>`;
     generalTimerValue.textContent = '0';
 });
 
-// Envoyer question
-sendQuestionBtn.addEventListener('click', () => {
-    const text = questionInput.value.trim();
-    if (!text) { alert('Veuillez saisir une question.'); return; }
-    if (!currentRoomCode) return;
-    socket.emit('sendQuestion', { roomCode: currentRoomCode, questionText: text });
+// État des questions chargées
+socket.on('questionsLoaded', ({ count, mode }) => {
+    quizStatus.textContent = `${count} questions chargées, mode ${mode}`;
 });
 
-// Réinitialiser buzzer (déverrouiller)
+// Envoyer question manuelle
+sendQuestionBtn.addEventListener('click', () => {
+    const question = questionInput.value.trim();
+    const answer = answerInput.value.trim();
+    if (!question) { alert('Veuillez saisir une question.'); return; }
+    if (!currentRoomCode) return;
+    socket.emit('sendQuestion', { roomCode: currentRoomCode, questionText: question, answerText: answer || null });
+    questionInput.value = '';
+    answerInput.value = '';
+});
+
+// Charger les questions
+loadQuestionsBtn.addEventListener('click', () => {
+    const text = questionsList.value.trim();
+    if (!text) { alert('Veuillez coller la liste des questions.'); return; }
+    const lines = text.split('\n').filter(l => l.trim() !== '');
+    const questions = lines.map(line => {
+        const parts = line.split('|').map(s => s.trim());
+        return { question: parts[0] || 'Question vide', answer: parts[1] || '' };
+    });
+    if (questions.length === 0) { alert('Aucune question valide.'); return; }
+    const mode = modeSelect.value;
+    socket.emit('loadQuestions', { roomCode: currentRoomCode, questions, mode });
+    quizStatus.textContent = `${questions.length} questions chargées (mode ${mode})`;
+});
+
+// Démarrer le quiz
+startQuizBtn.addEventListener('click', () => {
+    if (!currentRoomCode) return;
+    socket.emit('startQuiz', { roomCode: currentRoomCode });
+});
+
+// Question suivante (manuel)
+nextQuestionBtn.addEventListener('click', () => {
+    if (!currentRoomCode) return;
+    socket.emit('nextQuestion', { roomCode: currentRoomCode });
+});
+
+// Auto-next
+autoNextCheck.addEventListener('change', () => {
+    if (!currentRoomCode) return;
+    socket.emit('setAutoNext', { roomCode: currentRoomCode, auto: autoNextCheck.checked });
+});
+
+// Réinitialiser buzzer
 resetBuzzerBtn.addEventListener('click', () => {
     if (!currentRoomCode) return;
     socket.emit('resetBuzzer', { roomCode: currentRoomCode });
 });
 
-// Appliquer les timers
+// Appliquer timers
 applyTimersBtn.addEventListener('click', () => {
     const answerTime = parseInt(answerTimeInput.value);
     const questionTime = parseInt(questionTimeInput.value);
-    if (answerTime < 3 || answerTime > 60) { alert('Temps de réponse entre 3 et 60s'); return; }
+    if (answerTime < 3 || answerTime > 60) { alert('Temps réponse entre 3 et 60s'); return; }
     if (questionTime < 10 || questionTime > 120) { alert('Temps question entre 10 et 120s'); return; }
     if (!currentRoomCode) return;
     socket.emit('setTimers', { roomCode: currentRoomCode, answerTime, questionTime });
 });
 
-// Gestion des scores manuels (via boutons + et -)
-// déjà géré via les event listeners dynamiques
-
 // Gestion de la fermeture
 socket.on('roomClosed', () => {
     alert('La salle a été fermée.');
     location.reload();
+});
+
+// Gestion des erreurs
+socket.on('errorMessage', (msg) => {
+    alert(msg);
 });

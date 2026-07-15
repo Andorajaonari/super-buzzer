@@ -6,6 +6,7 @@ const roomCodeInput = document.getElementById('roomCodeInput');
 const joinBtn = document.getElementById('joinBtn');
 const errorMsg = document.getElementById('errorMsg');
 const questionDisplay = document.getElementById('questionDisplay');
+const answerDisplay = document.getElementById('answerDisplay');
 const playersList = document.getElementById('playersList');
 const winnerOverlay = document.getElementById('winnerOverlay');
 const winnerNameDisplay = document.getElementById('winnerNameDisplay');
@@ -15,7 +16,6 @@ const generalTimerValue = document.getElementById('generalTimerValue');
 let currentRoomCode = null;
 let currentPlayers = [];
 
-// Sons
 function playTone(freq, duration, type = 'sine') {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();
@@ -43,13 +43,19 @@ joinBtn.addEventListener('click', () => {
 
 roomCodeInput.addEventListener('keypress', e => { if (e.key === 'Enter') joinBtn.click(); });
 
-socket.on('spectatorJoined', ({ roomCode, currentQuestion, isLocked, players, lastWinner, answerTime, questionTime, remainingTime }) => {
+socket.on('spectatorJoined', ({ roomCode, currentQuestion, isLocked, players, lastWinner, answerTime, questionTime, currentAnswer, showingAnswer }) => {
     currentRoomCode = roomCode;
     joinScreen.style.display = 'none';
     gameScreen.style.display = 'flex';
 
     if (currentQuestion) {
         questionDisplay.innerHTML = currentQuestion;
+        if (showingAnswer && currentAnswer) {
+            answerDisplay.textContent = 'Réponse : ' + currentAnswer;
+            answerDisplay.style.display = 'block';
+        } else {
+            answerDisplay.style.display = 'none';
+        }
     } else {
         questionDisplay.innerHTML = '<span class="waiting">En attente de la question...</span>';
     }
@@ -62,17 +68,14 @@ socket.on('spectatorJoined', ({ roomCode, currentQuestion, isLocked, players, la
     currentPlayers = players;
     renderPlayers(players);
 
-    if (remainingTime !== null) {
-        generalTimerValue.textContent = remainingTime;
-    } else {
-        generalTimerValue.textContent = '--';
-    }
+    generalTimerValue.textContent = questionTime || '--';
 });
 
 socket.on('joinError', (msg) => { errorMsg.textContent = msg; });
 
 socket.on('newQuestion', ({ question, isLocked, questionTime }) => {
     questionDisplay.innerHTML = question;
+    answerDisplay.style.display = 'none';
     winnerOverlay.classList.remove('show');
     document.querySelectorAll('.score-item.highlight').forEach(el => el.classList.remove('highlight'));
     generalTimerValue.textContent = questionTime;
@@ -81,11 +84,7 @@ socket.on('newQuestion', ({ question, isLocked, questionTime }) => {
 socket.on('timerTick', ({ type, remaining }) => {
     if (type === 'general') {
         generalTimerValue.textContent = remaining;
-        if (remaining <= 5) {
-            generalTimerValue.style.color = '#e53935';
-        } else {
-            generalTimerValue.style.color = '#f5c842';
-        }
+        generalTimerValue.style.color = remaining <= 5 ? '#e53935' : '#f5c842';
     }
 });
 
@@ -95,18 +94,18 @@ socket.on('playerBuzzed', ({ playerId, playerName }) => {
     playBuzzSound();
 });
 
-socket.on('questionValidated', ({ winnerName, newScore }) => {
-    // On peut afficher un message temporaire
-    questionDisplay.innerHTML = `<div style="color:#4caf50;">${winnerName} a trouvé la réponse (+1 point)</div>`;
+socket.on('showAnswer', ({ answer, winnerName }) => {
+    let msg = winnerName ? `${winnerName} a répondu : ` : 'La réponse était : ';
+    questionDisplay.innerHTML = `<div>${msg}</div><div class="answer" style="display:block;color:#f5c842;">${answer}</div>`;
     winnerOverlay.classList.remove('show');
-    playCorrectSound();
-    setTimeout(() => {
-        // On remettra la question quand l'admin en enverra une nouvelle
-    }, 3000);
 });
 
-socket.on('buzzRejected', ({ playerName, excludedPlayers }) => {
-    // Afficher un message dans la question
+socket.on('questionValidated', ({ winnerName, newScore }) => {
+    // handled by showAnswer
+});
+
+socket.on('buzzRejected', ({ playerName }) => {
+    // juste un message éphémère
     questionDisplay.innerHTML = `<div style="color:#f5c842;">${playerName} a donné une mauvaise réponse. Autre joueur?</div>`;
     playWrongSound();
 });
@@ -117,10 +116,7 @@ socket.on('questionTimeout', () => {
     playTimeoutSound();
 });
 
-socket.on('scoresUpdate', (scores) => {
-    // On peut re-render les joueurs (mais on a déjà playersUpdate)
-});
-
+socket.on('scoresUpdate', (scores) => {});
 socket.on('playersUpdate', (players) => {
     currentPlayers = players;
     renderPlayers(players);
@@ -139,11 +135,8 @@ function showWinner(playerName) {
 closeWinnerBtn.addEventListener('click', () => {
     winnerOverlay.classList.remove('show');
 });
-
 winnerOverlay.addEventListener('click', (e) => {
-    if (e.target === winnerOverlay) {
-        winnerOverlay.classList.remove('show');
-    }
+    if (e.target === winnerOverlay) winnerOverlay.classList.remove('show');
 });
 
 function renderPlayers(players) {
@@ -154,10 +147,11 @@ function renderPlayers(players) {
     const sorted = [...players].sort((a, b) => (b.score || 0) - (a.score || 0));
     let html = '';
     sorted.forEach((p, index) => {
-        const medal = index === 0 ? '🥇 ' : index === 1 ? '🥈 ' : index === 2 ? '🥉 ' : '';
+        const rank = index + 1;
+        const rankStr = rank <= 3 ? `#${rank} ` : '';
         html += `
             <div class="score-item" data-id="${p.id}">
-                <span class="name">${medal}${p.name}</span>
+                <span class="name">${rankStr}${p.name}</span>
                 <span class="score">${p.score || 0}</span>
             </div>
         `;

@@ -13,7 +13,6 @@
         .join-screen { display: flex; flex-direction: column; gap: 15px; }
         .join-screen input { padding: 15px; border-radius: 8px; border: 1px solid #0f3460; background: #1a1a2e; color: white; font-size: 18px; }
         .join-screen button { background: #1565c0; border: none; color: white; padding: 15px; border-radius: 40px; font-weight: bold; font-size: 20px; cursor: pointer; }
-        .join-screen button:hover { background: #0d47a1; }
         .game-screen { display: none; flex-direction: column; align-items: center; gap: 20px; }
         .room-info { color: #aaa; font-size: 14px; background: #1a1a2e; padding: 8px 16px; border-radius: 40px; }
         .question-box { background: #1a1a2e; padding: 30px; border-radius: 16px; width: 100%; min-height: 120px; display: flex; justify-content: center; align-items: center; text-align: center; font-size: 26px; font-weight: 500; border: 2px solid #0f3460; }
@@ -34,7 +33,7 @@
         <div class="card">
             <div id="joinScreen" class="join-screen">
                 <h1 style="text-align:center;">Super Buzzer</h1>
-                <input type="text" id="roomCodeInput" placeholder="Code salle (4 caractères)" maxlength="4" style="text-transform:uppercase;">
+                <input type="text" id="roomCodeInput" placeholder="Code salle" maxlength="4" style="text-transform:uppercase;">
                 <input type="text" id="playerNameInput" placeholder="Votre pseudo">
                 <button id="joinBtn">Rejoindre</button>
                 <div id="joinError" style="color:#e53935;text-align:center;"></div>
@@ -43,7 +42,7 @@
             <div id="gameScreen" class="game-screen">
                 <div class="room-info">Salle: <span id="displayRoomCode">---</span> | Vous: <span id="displayPlayerName">---</span></div>
                 <div class="question-box" id="questionDisplay"><span class="waiting">En attente de la question...</span></div>
-                <div class="timer-display" id="timerDisplay">Temps: <span id="timerValue">--</span> s</div>
+                <div class="timer-display">Temps: <span id="timerValue">--</span> s</div>
                 <button class="buzzer-btn" id="buzzerBtn">BUZZ</button>
                 <div class="feedback" id="feedbackMsg">Appuyez sur BUZZ quand la question est affichée</div>
                 <div class="score-display">Score: <span id="scoreValue">0</span></div>

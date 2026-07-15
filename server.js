@@ -10,16 +10,10 @@ const io = new Server(server);
 
 app.use(express.static('public'));
 
-// Routes pour servir les pages
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'player.html'));
-});
-app.get('/admin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-});
-app.get('/spectator', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'spectator.html'));
-});
+// Routes
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'player.html')));
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/spectator', (req, res) => res.sendFile(path.join(__dirname, 'public', 'spectator.html')));
 
 // État du jeu
 const rooms = {};
@@ -33,45 +27,60 @@ function generateRoomCode() {
     return code;
 }
 
+function getPlayersList(room) {
+    return Object.entries(room.players).map(([id, data]) => ({ id, ...data }));
+}
+
+function getScores(room) {
+    const scores = {};
+    for (const [id, data] of Object.entries(room.players)) {
+        scores[id] = data.score;
+    }
+    return scores;
+}
+
 io.on('connection', (socket) => {
     console.log('Client connecté:', socket.id);
 
-    // Créer une salle (admin)
+    // --- Créer une salle ---
     socket.on('createRoom', (adminName) => {
         let roomCode = generateRoomCode();
-        while (rooms[roomCode]) {
-            roomCode = generateRoomCode();
-        }
+        while (rooms[roomCode]) roomCode = generateRoomCode();
         rooms[roomCode] = {
             adminId: socket.id,
             players: {},
+            // Quiz
+            questions: [],          // [{question, answer}]
+            currentIndex: -1,
+            mode: 'successive',     // 'successive' ou 'random'
+            usedIndices: [],        // pour le mode aléatoire
             currentQuestion: null,
+            currentAnswer: null,
+            // État buzzer
             buzzedThisRound: [],
-            isLocked: false,
-            lastBuzzerWinner: null,
             excludedPlayers: [],
-            // Timers (en secondes)
-            answerTime: 10,      // temps individuel par défaut
-            questionTime: 30,    // temps général par défaut
+            isLocked: false,
+            awaitingValidation: false,
+            currentBuzzerId: null,
+            lastBuzzerWinner: null,
+            // Timers
+            answerTime: 10,
+            questionTime: 30,
             timerRunning: false,
             timerInterval: null,
-            questionStartTime: null,
-            // Gestion du tour
-            awaitingValidation: false,
-            currentBuzzerId: null
+            // Contrôle du flux
+            autoNext: true,        // enchaînement automatique après affichage réponse
+            showingAnswer: false,
         };
         socket.join(roomCode);
         socket.emit('roomCreated', { roomCode });
-        console.log(`Salle ${roomCode} créée par ${adminName}`);
+        console.log(`Salle ${roomCode} créée`);
     });
 
-    // Rejoindre (joueur)
+    // --- Rejoindre (joueur) ---
     socket.on('joinRoom', ({ roomCode, playerName }) => {
         const room = rooms[roomCode];
-        if (!room) {
-            socket.emit('joinError', 'Salle inexistante');
-            return;
-        }
+        if (!room) { socket.emit('joinError', 'Salle inexistante'); return; }
         room.players[socket.id] = { name: playerName, score: 0 };
         socket.join(roomCode);
         socket.emit('joinedRoom', {
@@ -82,19 +91,15 @@ io.on('connection', (socket) => {
             scores: getScores(room),
             answerTime: room.answerTime,
             questionTime: room.questionTime,
-            remainingTime: room.timerRunning ? getRemainingTime(room) : null
         });
         io.to(roomCode).emit('playersUpdate', getPlayersList(room));
         console.log(`${playerName} a rejoint ${roomCode}`);
     });
 
-    // Spectateur
+    // --- Spectateur ---
     socket.on('joinSpectator', ({ roomCode }) => {
         const room = rooms[roomCode];
-        if (!room) {
-            socket.emit('joinError', 'Salle inexistante');
-            return;
-        }
+        if (!room) { socket.emit('joinError', 'Salle inexistante'); return; }
         socket.join(roomCode);
         socket.emit('spectatorJoined', {
             roomCode,
@@ -104,30 +109,100 @@ io.on('connection', (socket) => {
             lastWinner: room.lastBuzzerWinner,
             answerTime: room.answerTime,
             questionTime: room.questionTime,
-            remainingTime: room.timerRunning ? getRemainingTime(room) : null
+            currentAnswer: room.currentAnswer,
+            showingAnswer: room.showingAnswer,
         });
         console.log(`Spectateur connecté à ${roomCode}`);
     });
 
-    // Admin envoie une question
-    socket.on('sendQuestion', ({ roomCode, questionText }) => {
+    // --- Charger la liste de questions ---
+    socket.on('loadQuestions', ({ roomCode, questions, mode }) => {
         const room = rooms[roomCode];
         if (!room || room.adminId !== socket.id) return;
+        room.questions = questions; // [{question, answer}]
+        room.mode = mode || 'successive';
+        room.currentIndex = -1;
+        room.usedIndices = [];
+        io.to(roomCode).emit('questionsLoaded', { count: questions.length, mode: room.mode });
+        console.log(`${questions.length} questions chargées en mode ${room.mode}`);
+    });
 
-        // Arrêter l'ancien timer s'il existe
-        clearInterval(room.timerInterval);
-        room.timerRunning = false;
+    // --- Démarrer le quiz (envoie la première question) ---
+    socket.on('startQuiz', ({ roomCode }) => {
+        const room = rooms[roomCode];
+        if (!room || room.adminId !== socket.id) return;
+        if (room.questions.length === 0) {
+            socket.emit('errorMessage', 'Aucune question chargée.');
+            return;
+        }
+        room.currentIndex = -1;
+        room.usedIndices = [];
+        sendNextQuestion(room, roomCode);
+    });
 
-        room.currentQuestion = questionText;
+    // --- Passer à la question suivante (manuel) ---
+    socket.on('nextQuestion', ({ roomCode }) => {
+        const room = rooms[roomCode];
+        if (!room || room.adminId !== socket.id) return;
+        if (room.showingAnswer) {
+            // Si on affiche la réponse, on passe directement sans attendre
+            clearTimeout(room.answerDisplayTimeout);
+            room.showingAnswer = false;
+        }
+        sendNextQuestion(room, roomCode);
+    });
+
+    // --- Fonction pour envoyer la question suivante ---
+    function sendNextQuestion(room, roomCode) {
+        if (room.questions.length === 0) return;
+
+        // Choisir l'index
+        let index;
+        if (room.mode === 'random') {
+            // Toutes les questions ont-elles été utilisées ?
+            if (room.usedIndices.length >= room.questions.length) {
+                // On réinitialise si on veut boucler
+                room.usedIndices = [];
+            }
+            let available = [];
+            for (let i = 0; i < room.questions.length; i++) {
+                if (!room.usedIndices.includes(i)) available.push(i);
+            }
+            if (available.length === 0) {
+                // tout utilisé, on réinitialise
+                room.usedIndices = [];
+                available = room.questions.map((_, i) => i);
+            }
+            const rand = Math.floor(Math.random() * available.length);
+            index = available[rand];
+            room.usedIndices.push(index);
+        } else {
+            // successif
+            room.currentIndex = (room.currentIndex + 1) % room.questions.length;
+            index = room.currentIndex;
+        }
+
+        const q = room.questions[index];
+        if (!q) return;
+
+        // Préparer la question
+        room.currentQuestion = q.question;
+        room.currentAnswer = q.answer;
         room.buzzedThisRound = [];
         room.excludedPlayers = [];
         room.isLocked = false;
-        room.lastBuzzerWinner = null;
         room.awaitingValidation = false;
         room.currentBuzzerId = null;
+        room.lastBuzzerWinner = null;
+        room.showingAnswer = false;
 
+        // Arrêter les timers précédents
+        clearInterval(room.timerInterval);
+        room.timerRunning = false;
+
+        // Diffuser la question
         io.to(roomCode).emit('newQuestion', {
-            question: questionText,
+            question: q.question,
             isLocked: false,
             questionTime: room.questionTime
         });
@@ -135,75 +210,21 @@ io.on('connection', (socket) => {
         // Démarrer le timer général
         startGeneralTimer(room, roomCode);
 
-        console.log(`Question envoyée: ${questionText}`);
-    });
+        console.log(`Question ${index+1}/${room.questions.length}: ${q.question}`);
+    }
 
-    // Admin définit les timers
-    socket.on('setTimers', ({ roomCode, answerTime, questionTime }) => {
+    // --- Envoi manuel d'une question (avec réponse optionnelle) ---
+    socket.on('sendQuestion', ({ roomCode, questionText, answerText }) => {
         const room = rooms[roomCode];
         if (!room || room.adminId !== socket.id) return;
-        room.answerTime = answerTime;
-        room.questionTime = questionTime;
-        io.to(roomCode).emit('timersUpdated', { answerTime, questionTime });
-    });
 
-    // Joueur buzz
-    socket.on('buzz', ({ roomCode }) => {
-        const room = rooms[roomCode];
-        if (!room) return;
-
-        if (room.isLocked || room.awaitingValidation) {
-            socket.emit('buzzResult', { success: false, message: 'Buzzer verrouillé' });
-            return;
-        }
-        if (room.excludedPlayers.includes(socket.id)) {
-            socket.emit('buzzResult', { success: false, message: 'Vous êtes exclu pour cette question' });
-            return;
-        }
-        if (room.buzzedThisRound.includes(socket.id)) {
-            socket.emit('buzzResult', { success: false, message: 'Vous avez déjà buzzé' });
-            return;
-        }
-
-        // Enregistrer le buzz
-        room.buzzedThisRound.push(socket.id);
-        room.isLocked = true;
-        room.awaitingValidation = true;
-        room.currentBuzzerId = socket.id;
-        const playerName = room.players[socket.id]?.name || 'Anonyme';
-        room.lastBuzzerWinner = { playerId: socket.id, playerName };
-
-        socket.emit('buzzResult', { success: true, message: 'Buzz enregistré' });
-        io.to(roomCode).emit('playerBuzzed', { playerId: socket.id, playerName });
-
-        // Arrêter le timer général
+        // Arrêter le quiz automatique
         clearInterval(room.timerInterval);
         room.timerRunning = false;
+        room.showingAnswer = false;
 
-        // Démarrer le timer individuel
-        startAnswerTimer(room, roomCode, socket.id);
-
-        console.log(`${playerName} a buzzé`);
-    });
-
-    // Admin valide la réponse
-    socket.on('validateBuzz', ({ roomCode, playerId }) => {
-        const room = rooms[roomCode];
-        if (!room || room.adminId !== socket.id) return;
-        if (!room.awaitingValidation || room.currentBuzzerId !== playerId) return;
-
-        // Arrêter le timer individuel
-        clearInterval(room.timerInterval);
-        room.timerRunning = false;
-
-        // Ajouter 1 point
-        if (room.players[playerId]) {
-            room.players[playerId].score += 1;
-        }
-        const playerName = room.players[playerId]?.name || 'Anonyme';
-        const newScore = room.players[playerId].score;
-
-        // Réinitialiser pour la prochaine question
+        room.currentQuestion = questionText;
+        room.currentAnswer = answerText || null;
         room.buzzedThisRound = [];
         room.excludedPlayers = [];
         room.isLocked = false;
@@ -211,50 +232,45 @@ io.on('connection', (socket) => {
         room.currentBuzzerId = null;
         room.lastBuzzerWinner = null;
 
-        io.to(roomCode).emit('questionValidated', {
-            winnerName: playerName,
-            newScore,
-            scores: getScores(room)
+        io.to(roomCode).emit('newQuestion', {
+            question: questionText,
+            isLocked: false,
+            questionTime: room.questionTime,
+            manual: true
         });
-        io.to(roomCode).emit('scoresUpdate', getScores(room));
-        io.to(roomCode).emit('playersUpdate', getPlayersList(room));
 
-        console.log(`Réponse validée pour ${playerName}`);
-    });
-
-    // Admin refuse la réponse (mauvaise réponse)
-    socket.on('rejectBuzz', ({ roomCode, playerId }) => {
-        const room = rooms[roomCode];
-        if (!room || room.adminId !== socket.id) return;
-        if (!room.awaitingValidation || room.currentBuzzerId !== playerId) return;
-
-        // Arrêter le timer individuel
-        clearInterval(room.timerInterval);
-        room.timerRunning = false;
-
-        // Exclure le joueur
-        if (!room.excludedPlayers.includes(playerId)) {
-            room.excludedPlayers.push(playerId);
-        }
-        room.awaitingValidation = false;
-        room.currentBuzzerId = null;
-        room.isLocked = false; // déverrouiller pour les autres
-
-        const playerName = room.players[playerId]?.name || 'Anonyme';
-        io.to(roomCode).emit('buzzRejected', {
-            playerName,
-            excludedPlayers: room.excludedPlayers
-        });
-        // Informer le joueur
-        io.to(roomCode).emit('playerExcluded', { playerId });
-
-        // Redémarrer le timer général pour laisser le temps aux autres
         startGeneralTimer(room, roomCode);
-
-        console.log(`Réponse refusée pour ${playerName}`);
     });
 
-    // Timer individuel expiré
+    // --- Timer général ---
+    function startGeneralTimer(room, roomCode) {
+        clearInterval(room.timerInterval);
+        let remaining = room.questionTime;
+        room.timerRunning = true;
+        room.timerInterval = setInterval(() => {
+            remaining--;
+            io.to(roomCode).emit('timerTick', { type: 'general', remaining });
+            if (remaining <= 0) {
+                clearInterval(room.timerInterval);
+                room.timerRunning = false;
+                // Temps écoulé : afficher la réponse et passer
+                if (room.currentAnswer) {
+                    revealAnswer(room, roomCode, null); // null = pas de gagnant
+                } else {
+                    io.to(roomCode).emit('questionTimeout');
+                    room.isLocked = true;
+                    room.awaitingValidation = false;
+                    room.currentBuzzerId = null;
+                    // Si autoNext, on passe après un délai
+                    if (room.autoNext && room.questions.length > 0) {
+                        setTimeout(() => sendNextQuestion(room, roomCode), 3000);
+                    }
+                }
+            }
+        }, 1000);
+    }
+
+    // --- Timer individuel ---
     function startAnswerTimer(room, roomCode, playerId) {
         clearInterval(room.timerInterval);
         let remaining = room.answerTime;
@@ -273,40 +289,171 @@ io.on('connection', (socket) => {
                 room.currentBuzzerId = null;
                 room.isLocked = false;
                 io.to(roomCode).emit('answerTimeout', { playerId });
-                // Redémarrer le timer général
+                // Si réponse existe, on l'affiche après un court délai ?
+                // On laisse les autres buzzer, on ne révèle pas encore.
+                // On redémarre le timer général
                 startGeneralTimer(room, roomCode);
             }
         }, 1000);
     }
 
-    // Timer général
-    function startGeneralTimer(room, roomCode) {
+    // --- Révéler la réponse (après validation ou timeout) ---
+    function revealAnswer(room, roomCode, winnerName) {
+        room.showingAnswer = true;
+        room.isLocked = true;
+        room.awaitingValidation = false;
+        room.currentBuzzerId = null;
+
+        const answer = room.currentAnswer || 'Pas de réponse enregistrée';
+        io.to(roomCode).emit('showAnswer', {
+            answer,
+            winnerName: winnerName || null,
+        });
+
+        // Arrêter les timers
         clearInterval(room.timerInterval);
-        let remaining = room.questionTime;
-        room.timerRunning = true;
-        room.timerInterval = setInterval(() => {
-            remaining--;
-            io.to(roomCode).emit('timerTick', { type: 'general', remaining });
-            if (remaining <= 0) {
-                clearInterval(room.timerInterval);
-                room.timerRunning = false;
-                // Temps écoulé, personne n'a validé
-                io.to(roomCode).emit('questionTimeout');
-                // Réinitialiser pour passer à la suite (mais on ne change pas la question automatiquement, on laisse l'admin)
-                // L'admin devra envoyer une nouvelle question.
-                room.isLocked = true; // bloquer pour éviter de buzzer après le temps
-                room.awaitingValidation = false;
-                room.currentBuzzerId = null;
-            }
-        }, 1000);
+        room.timerRunning = false;
+
+        // Après un délai, passer à la question suivante si autoNext
+        if (room.autoNext && room.questions.length > 0) {
+            clearTimeout(room.answerDisplayTimeout);
+            room.answerDisplayTimeout = setTimeout(() => {
+                room.showingAnswer = false;
+                sendNextQuestion(room, roomCode);
+            }, 5000); // 5 secondes d'affichage de la réponse
+        }
     }
 
-    function getRemainingTime(room) {
-        // non utilisé dans cette version, on envoie via timerTick
-        return null;
-    }
+    // --- Validation d'un buzz ---
+    socket.on('validateBuzz', ({ roomCode, playerId }) => {
+        const room = rooms[roomCode];
+        if (!room || room.adminId !== socket.id) return;
+        if (!room.awaitingValidation || room.currentBuzzerId !== playerId) return;
 
-    // Déconnexion
+        // Arrêter timer individuel
+        clearInterval(room.timerInterval);
+        room.timerRunning = false;
+
+        // Ajouter point
+        if (room.players[playerId]) {
+            room.players[playerId].score += 1;
+        }
+        const playerName = room.players[playerId]?.name || 'Anonyme';
+        const newScore = room.players[playerId].score;
+
+        // Réinitialiser pour la validation
+        room.buzzedThisRound = [];
+        room.excludedPlayers = [];
+        room.isLocked = false;
+        room.awaitingValidation = false;
+        room.currentBuzzerId = null;
+        room.lastBuzzerWinner = { playerId, playerName };
+
+        io.to(roomCode).emit('questionValidated', {
+            winnerName: playerName,
+            newScore,
+            scores: getScores(room)
+        });
+        io.to(roomCode).emit('scoresUpdate', getScores(room));
+        io.to(roomCode).emit('playersUpdate', getPlayersList(room));
+
+        // Révéler la réponse
+        revealAnswer(room, roomCode, playerName);
+    });
+
+    // --- Refus d'un buzz ---
+    socket.on('rejectBuzz', ({ roomCode, playerId }) => {
+        const room = rooms[roomCode];
+        if (!room || room.adminId !== socket.id) return;
+        if (!room.awaitingValidation || room.currentBuzzerId !== playerId) return;
+
+        clearInterval(room.timerInterval);
+        room.timerRunning = false;
+
+        if (!room.excludedPlayers.includes(playerId)) {
+            room.excludedPlayers.push(playerId);
+        }
+        room.awaitingValidation = false;
+        room.currentBuzzerId = null;
+        room.isLocked = false;
+
+        const playerName = room.players[playerId]?.name || 'Anonyme';
+        io.to(roomCode).emit('buzzRejected', {
+            playerName,
+            excludedPlayers: room.excludedPlayers
+        });
+        io.to(roomCode).emit('playerExcluded', { playerId });
+
+        // Redémarrer timer général
+        startGeneralTimer(room, roomCode);
+    });
+
+    // --- Joueur buzz ---
+    socket.on('buzz', ({ roomCode }) => {
+        const room = rooms[roomCode];
+        if (!room) return;
+
+        if (room.isLocked || room.awaitingValidation || room.showingAnswer) {
+            socket.emit('buzzResult', { success: false, message: 'Buzzer verrouillé' });
+            return;
+        }
+        if (room.excludedPlayers.includes(socket.id)) {
+            socket.emit('buzzResult', { success: false, message: 'Vous êtes exclu' });
+            return;
+        }
+        if (room.buzzedThisRound.includes(socket.id)) {
+            socket.emit('buzzResult', { success: false, message: 'Vous avez déjà buzzé' });
+            return;
+        }
+
+        room.buzzedThisRound.push(socket.id);
+        room.isLocked = true;
+        room.awaitingValidation = true;
+        room.currentBuzzerId = socket.id;
+        const playerName = room.players[socket.id]?.name || 'Anonyme';
+        room.lastBuzzerWinner = { playerId: socket.id, playerName };
+
+        socket.emit('buzzResult', { success: true, message: 'Buzz enregistré' });
+        io.to(roomCode).emit('playerBuzzed', { playerId: socket.id, playerName });
+
+        // Arrêter timer général
+        clearInterval(room.timerInterval);
+        room.timerRunning = false;
+
+        // Démarrer timer individuel
+        startAnswerTimer(room, roomCode, socket.id);
+    });
+
+    // --- Réinitialiser buzzer (déverrouillage manuel) ---
+    socket.on('resetBuzzer', ({ roomCode }) => {
+        const room = rooms[roomCode];
+        if (!room || room.adminId !== socket.id) return;
+        room.isLocked = false;
+        room.awaitingValidation = false;
+        room.currentBuzzerId = null;
+        io.to(roomCode).emit('buzzerReset', { isLocked: false, question: room.currentQuestion });
+        if (!room.timerRunning) {
+            startGeneralTimer(room, roomCode);
+        }
+    });
+
+    // --- Modifier les timers ---
+    socket.on('setTimers', ({ roomCode, answerTime, questionTime }) => {
+        const room = rooms[roomCode];
+        if (!room || room.adminId !== socket.id) return;
+        room.answerTime = answerTime;
+        room.questionTime = questionTime;
+        io.to(roomCode).emit('timersUpdated', { answerTime, questionTime });
+    });
+
+    // --- Modifier le mode autoNext ---
+    socket.on('setAutoNext', ({ roomCode, auto }) => {
+        const room = rooms[roomCode];
+        if (!room || room.adminId !== socket.id) return;
+        room.autoNext = auto;
+    });
+
+    // --- Déconnexion ---
     socket.on('disconnect', () => {
         for (const [roomCode, room] of Object.entries(rooms)) {
             if (room.players[socket.id]) {
@@ -315,6 +462,7 @@ io.on('connection', (socket) => {
             }
             if (room.adminId === socket.id) {
                 clearInterval(room.timerInterval);
+                clearTimeout(room.answerDisplayTimeout);
                 delete rooms[roomCode];
                 io.to(roomCode).emit('roomClosed', 'L\'hôte a quitté');
             }
@@ -322,27 +470,10 @@ io.on('connection', (socket) => {
     });
 });
 
-// Fonctions utilitaires
-function getPlayersList(room) {
-    const list = [];
-    for (const [id, data] of Object.entries(room.players)) {
-        list.push({ id, name: data.name, score: data.score });
-    }
-    return list;
-}
-
-function getScores(room) {
-    const scores = {};
-    for (const [id, data] of Object.entries(room.players)) {
-        scores[id] = data.score;
-    }
-    return scores;
-}
-
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Serveur lancé sur http://localhost:${PORT}`);
-    console.log(`Admin: http://localhost:${PORT}/admin`);
-    console.log(`Joueur: http://localhost:${PORT}/`);
-    console.log(`Spectateur: http://localhost:${PORT}/spectator`);
+    console.log(`Serveur démarré sur http://localhost:${PORT}`);
+    console.log(`Admin : http://localhost:${PORT}/admin`);
+    console.log(`Joueur : http://localhost:${PORT}/player.html`);
+    console.log(`Spectateur : http://localhost:${PORT}/spectator.html`);
 });

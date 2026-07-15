@@ -16,9 +16,7 @@ const timerValue = document.getElementById('timerValue');
 
 let currentRoomCode = null;
 let myId = null;
-let buzzerEnabled = false;
 
-// Sons (générés par Web Audio)
 function playTone(freq, duration, type = 'sine') {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();
@@ -32,7 +30,6 @@ function playTone(freq, duration, type = 'sine') {
     osc.start();
     osc.stop(ctx.currentTime + duration);
 }
-
 function playBuzzSound() { playTone(800, 0.3, 'square'); }
 function playCorrectSound() { playTone(523, 0.15); setTimeout(() => playTone(659, 0.15), 150); setTimeout(() => playTone(784, 0.2), 300); }
 function playWrongSound() { playTone(300, 0.4, 'sawtooth'); }
@@ -41,7 +38,7 @@ function playTimeoutSound() { playTone(200, 0.5, 'sawtooth'); }
 joinBtn.addEventListener('click', () => {
     const roomCode = roomCodeInput.value.trim().toUpperCase();
     const playerName = playerNameInput.value.trim();
-    if (!roomCode || roomCode.length !== 4) { joinError.textContent = 'Code invalide (4 caractères)'; return; }
+    if (!roomCode || roomCode.length !== 4) { joinError.textContent = 'Code invalide'; return; }
     if (!playerName) { joinError.textContent = 'Entrez un pseudo'; return; }
     joinError.textContent = '';
     socket.emit('joinRoom', { roomCode, playerName });
@@ -50,7 +47,7 @@ joinBtn.addEventListener('click', () => {
 roomCodeInput.addEventListener('keypress', e => { if (e.key === 'Enter') joinBtn.click(); });
 playerNameInput.addEventListener('keypress', e => { if (e.key === 'Enter') joinBtn.click(); });
 
-socket.on('joinedRoom', ({ roomCode, playerId, currentQuestion, isLocked, scores, answerTime, questionTime, remainingTime }) => {
+socket.on('joinedRoom', ({ roomCode, playerId, currentQuestion, isLocked, scores, answerTime, questionTime }) => {
     currentRoomCode = roomCode;
     myId = playerId;
     displayRoomCode.textContent = roomCode;
@@ -60,7 +57,6 @@ socket.on('joinedRoom', ({ roomCode, playerId, currentQuestion, isLocked, scores
 
     if (currentQuestion) {
         questionDisplay.innerHTML = currentQuestion;
-        buzzerEnabled = !isLocked;
         buzzerBtn.disabled = isLocked;
         feedbackMsg.textContent = isLocked ? 'Buzzer verrouillé' : 'Prêt à buzzer';
     } else {
@@ -71,18 +67,12 @@ socket.on('joinedRoom', ({ roomCode, playerId, currentQuestion, isLocked, scores
     if (scores && scores[myId] !== undefined) {
         scoreValue.textContent = scores[myId];
     }
-    if (remainingTime !== null) {
-        timerValue.textContent = remainingTime;
-    } else {
-        timerValue.textContent = '--';
-    }
 });
 
 socket.on('joinError', (msg) => { joinError.textContent = msg; });
 
 socket.on('newQuestion', ({ question, isLocked, questionTime }) => {
     questionDisplay.innerHTML = question;
-    buzzerEnabled = true;
     buzzerBtn.disabled = false;
     feedbackMsg.textContent = 'Prêt à buzzer';
     feedbackMsg.className = 'feedback';
@@ -90,17 +80,11 @@ socket.on('newQuestion', ({ question, isLocked, questionTime }) => {
 });
 
 socket.on('timerTick', ({ type, remaining }) => {
-    if (type === 'general') {
-        timerValue.textContent = remaining;
-    } else if (type === 'answer') {
-        timerValue.textContent = remaining;
-    }
+    timerValue.textContent = remaining;
 });
 
 socket.on('playerBuzzed', ({ playerId, playerName }) => {
-    if (playerId === myId) {
-        // déjà traité par buzzResult
-    } else {
+    if (playerId !== myId) {
         feedbackMsg.textContent = `${playerName} a buzzé en premier`;
         feedbackMsg.className = 'feedback error';
         buzzerBtn.disabled = true;
@@ -136,16 +120,16 @@ socket.on('questionValidated', ({ winnerName, newScore }) => {
     }
 });
 
-socket.on('buzzRejected', ({ playerName, excludedPlayers }) => {
+socket.on('buzzRejected', ({ playerName }) => {
     if (playerName === displayPlayerName.textContent) {
-        feedbackMsg.textContent = 'Mauvaise réponse, vous êtes exclu pour cette question';
+        feedbackMsg.textContent = 'Mauvaise réponse, vous êtes exclu';
         feedbackMsg.className = 'feedback error';
         playWrongSound();
     } else {
         feedbackMsg.textContent = `${playerName} a donné une mauvaise réponse`;
         feedbackMsg.className = 'feedback';
     }
-    buzzerBtn.disabled = false; // les autres peuvent buzzer
+    buzzerBtn.disabled = false;
 });
 
 socket.on('playerExcluded', ({ playerId }) => {
@@ -163,6 +147,14 @@ socket.on('answerTimeout', ({ playerId }) => {
         playTimeoutSound();
         buzzerBtn.disabled = true;
     }
+});
+
+socket.on('showAnswer', ({ answer, winnerName }) => {
+    let msg = winnerName ? `${winnerName} a répondu : ` : 'La réponse était : ';
+    questionDisplay.innerHTML = `<div style="color:#f5c842;">${msg} ${answer}</div>`;
+    buzzerBtn.disabled = true;
+    feedbackMsg.textContent = 'Réponse affichée';
+    feedbackMsg.className = 'feedback';
 });
 
 socket.on('questionTimeout', () => {
