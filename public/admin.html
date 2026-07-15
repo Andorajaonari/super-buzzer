@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Super Buzzer</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; }
+        body { background: #1a1a2e; color: #eee; padding: 20px; min-height: 100vh; }
+        .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 20px; }
+        .card { background: #16213e; padding: 20px; border-radius: 12px; border: 1px solid #0f3460; }
+        h2 { color: #aaa; font-weight: 400; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; }
+        .room-code { font-size: 42px; font-weight: bold; color: #f5c842; text-align: center; background: #1a1a2e; padding: 10px; border-radius: 8px; }
+        .player-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #1a1a2e; margin-bottom: 6px; border-radius: 6px; }
+        .player-name { font-weight: 600; }
+        .player-score { background: #0f3460; padding: 2px 12px; border-radius: 20px; font-weight: bold; }
+        .score-btns button { background: #0f3460; border: none; color: white; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 18px; margin: 0 3px; }
+        .score-btns .plus { background: #2e7d32; }
+        .score-btns .minus { background: #c62828; }
+        .question-area textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #0f3460; background: #1a1a2e; color: white; font-size: 18px; resize: vertical; }
+        .btn-primary { background: #1565c0; border: none; color: white; padding: 12px 24px; border-radius: 40px; font-weight: bold; font-size: 18px; cursor: pointer; width: 100%; margin-top: 10px; }
+        .btn-primary:hover { background: #0d47a1; }
+        .buzz-status { background: #1a1a2e; padding: 20px; border-radius: 8px; text-align: center; margin-top: 15px; border: 2px solid #0f3460; }
+        .buzz-status .winner { font-size: 24px; font-weight: bold; color: #f5c842; }
+        .buzz-status .waiting { color: #aaa; font-size: 18px; }
+        .controls { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
+        .controls button { flex: 1; padding: 12px; border-radius: 40px; font-weight: bold; border: none; cursor: pointer; background: #0f3460; color: white; }
+        .controls .reset-btn { background: #f57c00; color: white; }
+        .timer-controls { display: flex; gap: 15px; margin-top: 10px; flex-wrap: wrap; }
+        .timer-controls label { display: flex; flex-direction: column; flex: 1; font-size: 14px; color: #aaa; }
+        .timer-controls input { padding: 8px; border-radius: 6px; border: 1px solid #0f3460; background: #1a1a2e; color: white; font-size: 16px; width: 100%; }
+        .buzz-action { display: none; margin-top: 20px; padding: 15px; background: #1a1a2e; border-radius: 8px; border: 2px solid #f5c842; }
+        .buzz-action .buzz-player { font-size: 20px; font-weight: bold; color: #f5c842; }
+        .action-buttons { display: flex; gap: 10px; margin-top: 10px; }
+        .action-buttons button { flex: 1; padding: 12px; border-radius: 40px; font-weight: bold; border: none; cursor: pointer; font-size: 16px; }
+        .validate-btn { background: #2e7d32; color: white; }
+        .reject-btn { background: #c62828; color: white; }
+        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+        .timer-display { font-size: 28px; text-align: center; margin: 10px 0; color: #f5c842; }
+        .timer-display .label { font-size: 14px; color: #aaa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Colonne 1: Salle et joueurs -->
+        <div class="card">
+            <h2>Salle</h2>
+            <div class="room-code" id="roomCodeDisplay">---</div>
+            <p style="text-align:center;margin-top:8px;color:#aaa;">Partagez ce code</p>
+            <hr style="border-color:#0f3460;margin:20px 0;">
+            <h2>Joueurs (<span id="playerCount">0</span>)</h2>
+            <div id="playersList"><div style="color:#666;text-align:center;padding:20px;">Aucun joueur</div></div>
+        </div>
+
+        <!-- Colonne 2: Questions et actions -->
+        <div class="card question-area">
+            <h2>Envoyer une question</h2>
+            <textarea id="questionInput" rows="3" placeholder="Tapez votre question..."></textarea>
+            <button id="sendQuestionBtn" class="btn-primary">Envoyer la question</button>
+
+            <!-- Timer général -->
+            <div class="timer-display" id="generalTimerDisplay">
+                <span class="label">Temps restant</span><br>
+                <span id="generalTimerValue">--</span> s
+            </div>
+
+            <div class="buzz-status" id="buzzStatus">
+                <div class="waiting">En attente d'un buzzer...</div>
+            </div>
+
+            <!-- Zone validation -->
+            <div class="buzz-action" id="buzzAction">
+                <div class="buzz-player" id="buzzPlayerName">---</div>
+                <div style="margin-top:5px;color:#aaa;">a buzzé</div>
+                <div class="action-buttons">
+                    <button class="validate-btn" id="validateBtn">Valider (+1 point)</button>
+                    <button class="reject-btn" id="rejectBtn">Refuser</button>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button class="reset-btn" id="resetBuzzerBtn">Déverrouiller le buzzer</button>
+            </div>
+
+            <!-- Réglages des timers -->
+            <div style="margin-top:20px;border-top:1px solid #0f3460;padding-top:15px;">
+                <h2>Paramètres des timers</h2>
+                <div class="timer-controls">
+                    <label>Temps de réponse (s)
+                        <input type="number" id="answerTimeInput" value="10" min="3" max="60">
+                    </label>
+                    <label>Temps par question (s)
+                        <input type="number" id="questionTimeInput" value="30" min="10" max="120">
+                    </label>
+                </div>
+                <button id="applyTimersBtn" class="btn-primary" style="margin-top:10px;">Appliquer</button>
+            </div>
+        </div>
+
+        <!-- Colonne 3: Instructions -->
+        <div class="card">
+            <h2>Instructions</h2>
+            <ul style="list-style:none;color:#ccc;line-height:2;">
+                <li>1. Les joueurs rejoignent avec le code.</li>
+                <li>2. Tapez une question et envoyez.</li>
+                <li>3. Le premier buzzer apparaît ; choisissez Valider ou Refuser.</li>
+                <li>4. Si Refus, le joueur est exclu pour cette question.</li>
+                <li>5. Le temps de réponse est limité (timer individuel).</li>
+                <li>6. Si personne ne buzz dans le temps imparti, la question est passée.</li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>

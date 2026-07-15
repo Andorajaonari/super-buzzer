@@ -1,0 +1,14 @@
+{
+  "name": "super-buzzer",
+  "version": "1.0.0",
+  "description": "Système de buzzer avec timers et sons",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "uuid": "^9.0.0"
+  }
+}

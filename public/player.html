@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Joueur - Super Buzzer</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; user-select: none; }
+        body { background: #1a1a2e; color: #eee; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
+        .container { max-width: 700px; width: 100%; }
+        .card { background: #16213e; padding: 30px; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.8); border: 1px solid #0f3460; }
+        .join-screen { display: flex; flex-direction: column; gap: 15px; }
+        .join-screen input { padding: 15px; border-radius: 8px; border: 1px solid #0f3460; background: #1a1a2e; color: white; font-size: 18px; }
+        .join-screen button { background: #1565c0; border: none; color: white; padding: 15px; border-radius: 40px; font-weight: bold; font-size: 20px; cursor: pointer; }
+        .join-screen button:hover { background: #0d47a1; }
+        .game-screen { display: none; flex-direction: column; align-items: center; gap: 20px; }
+        .room-info { color: #aaa; font-size: 14px; background: #1a1a2e; padding: 8px 16px; border-radius: 40px; }
+        .question-box { background: #1a1a2e; padding: 30px; border-radius: 16px; width: 100%; min-height: 120px; display: flex; justify-content: center; align-items: center; text-align: center; font-size: 26px; font-weight: 500; border: 2px solid #0f3460; }
+        .question-box.waiting { color: #666; font-size: 20px; }
+        .buzzer-btn { width: 200px; height: 200px; border-radius: 50%; background: #c62828; border: none; color: white; font-size: 28px; font-weight: bold; cursor: pointer; box-shadow: 0 8px 0 #7f0000; transition: 0.1s; }
+        .buzzer-btn:active { transform: translateY(8px); box-shadow: 0 0 0 #7f0000; }
+        .buzzer-btn:disabled { opacity: 0.5; transform: translateY(5px); box-shadow: 0 3px 0 #7f0000; cursor: not-allowed; }
+        .feedback { font-size: 18px; min-height: 40px; color: #aaa; }
+        .feedback.success { color: #4caf50; }
+        .feedback.error { color: #e53935; }
+        .score-display { font-size: 24px; background: #1a1a2e; padding: 10px 30px; border-radius: 40px; border: 1px solid #f5c842; color: #f5c842; }
+        .timer-display { font-size: 20px; color: #f5c842; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div id="joinScreen" class="join-screen">
+                <h1 style="text-align:center;">Super Buzzer</h1>
+                <input type="text" id="roomCodeInput" placeholder="Code salle (4 caractères)" maxlength="4" style="text-transform:uppercase;">
+                <input type="text" id="playerNameInput" placeholder="Votre pseudo">
+                <button id="joinBtn">Rejoindre</button>
+                <div id="joinError" style="color:#e53935;text-align:center;"></div>
+            </div>
+
+            <div id="gameScreen" class="game-screen">
+                <div class="room-info">Salle: <span id="displayRoomCode">---</span> | Vous: <span id="displayPlayerName">---</span></div>
+                <div class="question-box" id="questionDisplay"><span class="waiting">En attente de la question...</span></div>
+                <div class="timer-display" id="timerDisplay">Temps: <span id="timerValue">--</span> s</div>
+                <button class="buzzer-btn" id="buzzerBtn">BUZZ</button>
+                <div class="feedback" id="feedbackMsg">Appuyez sur BUZZ quand la question est affichée</div>
+                <div class="score-display">Score: <span id="scoreValue">0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="player.js"></script>
+</body>
+</html>

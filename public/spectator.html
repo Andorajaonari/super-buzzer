@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spectateur - Super Buzzer</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; }
+        body { background: #0a0a1a; color: #eee; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
+        .container { max-width: 1200px; width: 100%; }
+        .join-screen { background: #16213e; padding: 40px; border-radius: 24px; text-align: center; max-width: 500px; margin: 0 auto; border: 1px solid #0f3460; }
+        .join-screen h1 { font-size: 40px; }
+        .join-screen input { width: 100%; padding: 18px; border-radius: 8px; border: 1px solid #0f3460; background: #1a1a2e; color: white; font-size: 24px; text-align: center; text-transform: uppercase; letter-spacing: 8px; }
+        .join-screen button { background: #1565c0; border: none; color: white; padding: 18px; border-radius: 40px; font-weight: bold; font-size: 22px; cursor: pointer; width: 100%; margin-top: 15px; }
+        .error-msg { color: #e53935; margin-top: 10px; }
+        .game-screen { display: none; gap: 20px; flex-direction: column; }
+        .winner-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; }
+        .winner-overlay.show { display: flex; }
+        .winner-overlay .trophy { font-size: 100px; }
+        .winner-overlay .name-display { font-size: 72px; font-weight: 900; color: #f5c842; text-shadow: 0 0 40px rgba(245,200,66,0.3); text-align: center; }
+        .winner-overlay .sub-text { font-size: 28px; color: #aaa; margin-top: 10px; }
+        .winner-overlay .close-btn { margin-top: 30px; padding: 12px 40px; border-radius: 60px; border: 2px solid #f5c842; background: transparent; color: white; font-size: 18px; cursor: pointer; }
+        .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
+        .question-box { background: #16213e; padding: 40px; border-radius: 24px; border: 2px solid #0f3460; min-height: 300px; display: flex; justify-content: center; align-items: center; text-align: center; font-size: 34px; font-weight: 500; line-height: 1.4; }
+        .question-box.waiting { color: #666; font-size: 24px; }
+        .scoreboard { background: #16213e; padding: 25px; border-radius: 24px; border: 2px solid #0f3460; max-height: 500px; overflow-y: auto; }
+        .scoreboard h2 { color: #aaa; text-transform: uppercase; font-size: 14px; letter-spacing: 1px; border-bottom: 1px solid #0f3460; padding-bottom: 10px; }
+        .score-item { display: flex; justify-content: space-between; padding: 12px 15px; background: #1a1a2e; margin-bottom: 8px; border-radius: 8px; font-size: 20px; }
+        .score-item .score { background: #0f3460; padding: 0 16px; border-radius: 40px; font-weight: bold; color: #f5c842; }
+        .score-item.highlight { background: #f5c842; color: #0a0a1a; transform: scale(1.02); }
+        .score-item.highlight .score { background: #0a0a1a; color: #f5c842; }
+        .timer-display { text-align: center; font-size: 28px; color: #f5c842; margin: 10px 0; }
+        @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="joinScreen" class="join-screen">
+            <h1>Écran Public</h1>
+            <p style="color:#aaa;margin:15px 0;">Entrez le code de la salle</p>
+            <input type="text" id="roomCodeInput" placeholder="Code" maxlength="4" style="text-transform:uppercase;">
+            <button id="joinBtn">Regarder</button>
+            <div id="errorMsg" class="error-msg"></div>
+        </div>
+
+        <div id="gameScreen" class="game-screen">
+            <div id="winnerOverlay" class="winner-overlay">
+                <div class="trophy">⚡</div>
+                <div class="name-display" id="winnerNameDisplay">---</div>
+                <div class="sub-text">a buzzé en premier</div>
+                <button class="close-btn" id="closeWinnerBtn">Fermer</button>
+            </div>
+
+            <div class="timer-display">
+                Temps restant: <span id="generalTimerValue">--</span> s
+            </div>
+
+            <div class="grid">
+                <div class="question-box" id="questionDisplay"><span class="waiting">En attente de la question...</span></div>
+                <div class="scoreboard">
+                    <h2>Classement</h2>
+                    <div id="playersList"><div style="color:#666;text-align:center;padding:20px;">Aucun joueur</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="spectator.js"></script>
+</body>
+</html>
