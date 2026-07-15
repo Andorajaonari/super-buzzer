@@ -16,6 +16,35 @@ app.get('/spectator', (req, res) => res.sendFile(path.join(__dirname, 'public', 
 
 const rooms = {};
 
+const basicAuth = require('basic-auth');
+
+// --- Middleware d'authentification pour l'admin ---
+const auth = function (req, res, next) {
+    // Ne protéger que la route /admin et ses sous-routes
+    if (!req.path.startsWith('/admin')) {
+        return next();
+    }
+
+    const user = basicAuth(req);
+    // Définissez vos identifiants ici (à mettre dans des variables d'environnement)
+    const adminUser = process.env.ADMIN_USER || 'admin';
+    const adminPass = process.env.ADMIN_PASS || 'motdepasse';
+
+    if (!user || user.name !== adminUser || user.pass !== adminPass) {
+        res.set('WWW-Authenticate', 'Basic realm="Administration"');
+        return res.status(401).send('Authentification requise.');
+    }
+    next();
+};
+
+// Appliquer le middleware avant les routes
+app.use(auth);
+
+// Routes
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'player.html')));
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/spectator', (req, res) => res.sendFile(path.join(__dirname, 'public', 'spectator.html')));
+
 function generateRoomCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
