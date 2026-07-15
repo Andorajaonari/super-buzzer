@@ -1,187 +1,342 @@
-Super Buzzer - Système de buzzer multi-joueurs en temps réel
-https://img.shields.io/badge/version-1.0.0-blue
-https://img.shields.io/badge/license-MIT-green
-https://img.shields.io/badge/Node.js-14+-brightgreen
+# Super Buzzer - Système de buzzer multi-joueurs en temps réel
 
-Un système complet de buzzer pour jeux, quiz ou animations, conçu pour fonctionner avec des tablettes, ordinateurs et un écran public. Inspiré des jeux télévisés comme "Question pour un champion", il propose une gestion fine des tours, des timers et des sons.
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Node.js](https://img.shields.io/badge/Node.js-14+-brightgreen)
 
-🎯 Fonctionnalités
-3 interfaces distinctes :
+Un système complet de buzzer pour jeux, quiz ou animations, conçu pour fonctionner avec des tablettes, ordinateurs et un écran public.
 
-Admin : gère les questions, valide/refuse les réponses, ajuste les scores et paramètres.
+Inspiré des jeux télévisés comme **Question pour un champion**, il propose une gestion complète des tours, des timers et des sons.
 
-Joueur : permet de buzzer et de suivre son score en temps réel.
+---
 
-Spectateur : affiche la question, le classement, les timers et le gagnant en plein écran.
+# Fonctionnalités
 
-Gestion des tours :
+## Trois interfaces distinctes
 
-Validation (+1 point) ou refus (exclusion du joueur pour la question).
+### Admin
+- Gère les questions.
+- Valide ou refuse les réponses.
+- Ajuste les scores.
+- Configure les paramètres et les timers.
 
-Exclusion automatique en cas de dépassement du temps individuel.
+### Joueur
+- Permet de buzzer.
+- Affiche le score en temps réel.
 
-Timers configurables :
+### Spectateur
+- Affiche la question.
+- Affiche le classement.
+- Affiche les timers.
+- Met en évidence le joueur qui vient de buzzer.
+- Mode plein écran.
 
-Temps de réponse individuel (après un buzz).
+## Gestion des tours
 
-Temps général par question (si personne ne buzz, la question est passée).
+- Validation d'une réponse (+1 point).
+- Refus d'une réponse (exclusion du joueur pour la question).
+- Exclusion automatique si le temps individuel est dépassé.
 
-Sons intégrés (via Web Audio) :
+## Timers configurables
 
-Buzz, bonne réponse, mauvaise réponse, temps écoulé.
+- Temps de réponse individuel après un buzz.
+- Temps général par question.
+- Passage automatique à la question suivante si personne ne buzz.
 
-Communication temps réel avec Socket.IO.
+## Sons intégrés
 
-Aucune base de données nécessaire (tout en mémoire).
+Générés via **Web Audio API** :
 
-Interface sobre et professionnelle (sans émojis).
+- Buzz
+- Bonne réponse
+- Mauvaise réponse
+- Temps écoulé
 
-📦 Technologies utilisées
-Backend : Node.js, Express, Socket.IO
+## Temps réel
 
-Frontend : HTML5, CSS3, JavaScript (vanilla)
+- Communication instantanée via **Socket.IO**.
+- Aucun rafraîchissement de page nécessaire.
 
-Audio : Web Audio API
+## Stockage
 
-Gestion d'identifiants : UUID
+- Aucune base de données.
+- Toutes les informations sont conservées en mémoire.
 
-🚀 Installation et lancement local
-Prérequis
-Node.js (version 14 ou supérieure) installé sur votre ordinateur.
+## Interface
 
-Un navigateur web moderne (Chrome, Firefox, Edge, Safari).
+- Sobre.
+- Professionnelle.
+- Responsive.
 
-Étapes
-Cloner le dépôt (ou télécharger les fichiers) :
+---
 
-bash
+# Technologies utilisées
+
+## Backend
+
+- Node.js
+- Express
+- Socket.IO
+
+## Frontend
+
+- HTML5
+- CSS3
+- JavaScript (Vanilla)
+
+## Audio
+
+- Web Audio API
+
+## Gestion des identifiants
+
+- UUID
+
+---
+
+# Installation
+
+## Prérequis
+
+- Node.js 14 ou supérieur
+- Un navigateur moderne (Chrome, Firefox, Edge ou Safari)
+
+## Cloner le dépôt
+
+```bash
 git clone https://github.com/votre-utilisateur/super-buzzer.git
 cd super-buzzer
-Installer les dépendances :
+```
 
-bash
+## Installer les dépendances
+
+```bash
 npm install
-Lancer le serveur :
+```
 
-bash
+## Lancer le serveur
+
+```bash
 node server.js
-Accéder aux interfaces (sur le même ordinateur) :
+```
 
-Admin : http://localhost:3000/admin
+---
 
-Joueur : http://localhost:3000/player.html
+# Accès aux interfaces
 
-Spectateur : http://localhost:3000/spectator.html
+Sur l'ordinateur qui héberge le serveur :
 
-Pour que d’autres appareils (tablettes, smartphones) se connectent :
+| Interface | Adresse |
+|-----------|----------|
+| Admin | http://localhost:3000/admin |
+| Joueur | http://localhost:3000/player.html |
+| Spectateur | http://localhost:3000/spectator.html |
 
-Trouvez l’adresse IP locale de votre ordinateur (ex: 192.168.1.42).
+---
 
-Sur les autres appareils (même réseau WiFi), ouvrez http://192.168.1.42:3000/player.html (ou admin/spectator).
+# Utilisation sur plusieurs appareils
 
-Remplacez 192.168.1.42 par votre propre IP.
+1. Trouvez l'adresse IP locale de votre ordinateur (par exemple `192.168.1.42`).
+2. Connectez tous les appareils sur le même réseau Wi-Fi.
+3. Ouvrez :
 
-🖥️ Utilisation
-Admin
-À l’ouverture, une salle est automatiquement créée avec un code (4 lettres/chiffres).
+```
+http://192.168.1.42:3000/player.html
+```
 
-Partagez ce code avec les joueurs pour qu’ils rejoignent.
+ou
 
-Envoyer une question : saisissez le texte et cliquez sur "Envoyer la question".
+```
+http://192.168.1.42:3000/admin
+```
 
-Dès qu’un joueur buzz, son nom apparaît avec les boutons Valider (+1 point) ou Refuser (exclusion).
+ou
 
-Utilisez les boutons + / - dans la liste des joueurs pour ajuster manuellement les scores.
+```
+http://192.168.1.42:3000/spectator.html
+```
 
-Ajustez les timers (temps de réponse individuel et temps général) via les champs en bas.
+Remplacez l'adresse IP par celle de votre ordinateur.
 
-Si aucun joueur ne buzz dans le temps imparti, la question est automatiquement passée.
+---
 
-Joueur
-Entrez le code de la salle et votre pseudo.
+# Utilisation
 
-Attendez que l’admin envoie une question.
+## Interface Admin
 
-Appuyez sur le gros bouton BUZZ dès que vous connaissez la réponse.
+À l'ouverture :
 
-Une fois votre buzz validé ou refusé, suivez les instructions à l’écran.
+- une salle est automatiquement créée ;
+- un code de salle (4 caractères) est généré.
 
-Si vous êtes exclu (mauvaise réponse ou temps dépassé), vous ne pourrez plus buzzer sur cette question.
+Partagez ce code avec les joueurs.
 
-Spectateur
-Entrez le code de la salle pour suivre le jeu en direct.
+### Pendant le jeu
 
-Visualisez la question, le chronomètre, le classement et le joueur qui vient de buzzer (affichage en plein écran avec badge "BUZZ").
+- Envoyer une question.
+- Valider une réponse (+1 point).
+- Refuser une réponse (exclusion).
+- Modifier les scores avec les boutons **+** et **-**.
+- Modifier les timers.
+- Si personne ne buzz avant la fin du temps général, la question est automatiquement passée.
 
-Le spectateur n’a pas d’action, il reflète simplement l’état du jeu.
+---
 
-⚙️ Configuration des timers
-Les timers sont entièrement configurables par l’admin :
+## Interface Joueur
 
-Temps de réponse (individuel) : durée impartie après qu’un joueur a buzzé pour donner sa réponse. Si le temps est dépassé, le joueur est exclu.
+1. Entrer le code de la salle.
+2. Choisir un pseudo.
+3. Attendre qu'une question soit envoyée.
+4. Appuyer sur **BUZZ** dès que la réponse est trouvée.
 
-Temps par question (général) : durée maximale autorisée pour que quelqu’un buzz. Si le temps est écoulé sans aucun buzz, la question est passée.
+Après le buzz :
 
-Les valeurs par défaut sont :
+- attendre la validation de l'administrateur ;
+- si la réponse est refusée ou si le temps est dépassé, le joueur est exclu pour cette question.
 
-Réponse individuelle : 10 secondes
+---
 
-Général : 30 secondes
+## Interface Spectateur
 
-🎵 Sons intégrés
-L’application génère les sons suivants via l’API Web Audio (aucun fichier audio externe requis) :
+Le spectateur :
 
-Buzz : signal carré à 800 Hz.
+- rejoint la salle avec son code ;
+- suit la partie en direct ;
+- voit :
+  - la question ;
+  - le chronomètre ;
+  - le classement ;
+  - le joueur ayant buzzé.
 
-Bonne réponse : trois notes ascendantes.
+Cette interface est uniquement destinée à l'affichage.
 
-Mauvaise réponse : son grave à 300 Hz.
+---
 
-Temps écoulé : son alarmant à 200 Hz.
+# Configuration des timers
 
-🌐 Déploiement
-Serveur local (recommandé pour les événements)
-Suivez les instructions d’installation locale. Tous les appareils doivent être sur le même réseau WiFi.
+L'administrateur peut modifier :
 
-Déploiement en ligne (gratuit)
-Pour une utilisation à distance (joueurs dispersés), vous pouvez déployer sur des plateformes qui supportent les WebSockets et les serveurs Node.js persistants :
+## Temps de réponse individuel
 
-Render.com (gratuit avec mise en veille après 15 min d’inactivité) : Créez un Web Service depuis votre dépôt GitHub.
+Durée accordée au joueur après son buzz.
 
-Fly.io (gratuit avec 3 VM) : Utilisez flyctl pour déployer.
+Si le temps expire :
 
-Attention : Les plateformes serverless comme Vercel ou Netlify ne sont pas adaptées à cette application à cause de leurs limitations sur les WebSockets.
+- le joueur est automatiquement exclu.
 
-📁 Structure du projet
-text
+## Temps général
+
+Durée maximale pour qu'un joueur buzz.
+
+Si personne ne buzz :
+
+- la question est automatiquement passée.
+
+### Valeurs par défaut
+
+| Paramètre | Valeur |
+|-----------|---------|
+| Temps individuel | 10 secondes |
+| Temps général | 30 secondes |
+
+---
+
+# Sons intégrés
+
+Tous les sons sont générés via **Web Audio API**.
+
+| Événement | Description |
+|-----------|-------------|
+| Buzz | Signal carré à 800 Hz |
+| Bonne réponse | Trois notes ascendantes |
+| Mauvaise réponse | Son grave à 300 Hz |
+| Temps écoulé | Son d'alerte à 200 Hz |
+
+Aucun fichier audio externe n'est nécessaire.
+
+---
+
+# Déploiement
+
+## Serveur local
+
+Recommandé pour les événements.
+
+Tous les appareils doivent être connectés au même réseau Wi-Fi.
+
+## Déploiement en ligne
+
+Compatible avec les plateformes supportant :
+
+- Node.js
+- WebSockets
+- Serveurs persistants
+
+Exemples :
+
+- Render
+- Fly.io
+
+> **Attention**
+>
+> Les plateformes serverless comme **Vercel** ou **Netlify** ne sont pas adaptées à cette application en raison de leurs limitations concernant les WebSockets.
+
+---
+
+# Structure du projet
+
+```text
 super-buzzer/
-├── server.js              # Serveur Node.js avec Socket.IO
-├── package.json           # Dépendances
+├── server.js                 # Serveur Node.js + Socket.IO
+├── package.json              # Dépendances
 ├── public/
-│   ├── admin.html         # Interface administrateur
+│   ├── admin.html            # Interface administrateur
 │   ├── admin.js
-│   ├── player.html        # Interface joueur
+│   ├── player.html           # Interface joueur
 │   ├── player.js
-│   ├── spectator.html     # Interface spectateur
+│   ├── spectator.html        # Interface spectateur
 │   └── spectator.js
-└── README.md              # Ce fichier
-🤝 Contribution
-Les contributions sont les bienvenues ! Pour proposer des améliorations :
+└── README.md
+```
 
-Forkez le projet.
+---
 
-Créez votre branche (git checkout -b feature/ma-fonctionnalite).
+# Contribution
 
-Committez vos changements (git commit -m 'Ajout d\'une fonctionnalité').
+Les contributions sont les bienvenues.
 
-Poussez la branche (git push origin feature/ma-fonctionnalite).
+1. Forkez le projet.
 
-Ouvrez une Pull Request.
+2. Créez une branche :
 
-📄 Licence
-Ce projet est sous licence MIT. Vous êtes libre de l’utiliser, de le modifier et de le distribuer.
+```bash
+git checkout -b feature/ma-fonctionnalite
+```
 
-🙏 Remerciements
-Inspiré par des projets comme Digibuzzer et les besoins concrets d’animateurs, enseignants et organisateurs d’événements.
+3. Commitez vos modifications :
 
-Bonne animation !
+```bash
+git commit -m "Ajout d'une fonctionnalité"
+```
+
+4. Poussez la branche :
+
+```bash
+git push origin feature/ma-fonctionnalite
+```
+
+5. Ouvrez une Pull Request.
+
+---
+
+# Licence
+
+Ce projet est distribué sous licence **MIT**.
+
+Vous êtes libre de l'utiliser, de le modifier et de le redistribuer conformément aux termes de cette licence.
+
+---
+
+# Remerciements
+
+Ce projet est inspiré des jeux télévisés de culture générale, de projets comme **Digibuzzer**, ainsi que des besoins concrets des enseignants, animateurs et organisateurs d'événements souhaitant disposer d'un système de buzzer simple, rapide et entièrement fonctionnel.
