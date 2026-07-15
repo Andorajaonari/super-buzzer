@@ -177,18 +177,47 @@ sendQuestionBtn.addEventListener('click', () => {
 loadQuestionsBtn.addEventListener('click', function() {
     const text = questionsList.value.trim();
     if (!text) {
-        alert('Veuillez coller la liste des questions (une par ligne avec "Question | Réponse").');
+        alert('Veuillez coller la liste des questions.');
         return;
     }
-    const lines = text.split('\n').filter(l => l.trim() !== '');
-    const questions = lines.map(line => {
-        const parts = line.split('|').map(s => s.trim());
-        return { question: parts[0] || 'Question vide', answer: parts[1] || '' };
-    });
+
+    // Découper par numéro de question (ex: "1.", "2.", etc.)
+    const questionBlocks = text.split(/\n(?=\d+\.\s)/).filter(block => block.trim() !== '');
+    
+    const questions = [];
+    for (const block of questionBlocks) {
+        // Trouver la ligne qui contient le séparateur "|" (la réponse)
+        const lines = block.split('\n').filter(l => l.trim() !== '');
+        const answerLine = lines.find(l => l.includes('|'));
+        let answer = '';
+        let questionText = '';
+        
+        if (answerLine) {
+            // Extraire la réponse
+            const parts = answerLine.split('|').map(s => s.trim());
+            answer = parts[1] || '';
+            // Retirer la ligne de réponse du texte de la question
+            const linesWithoutAnswer = lines.filter(l => !l.includes('|'));
+            questionText = linesWithoutAnswer.join('\n').trim();
+        } else {
+            // Fallback : tout le bloc est la question
+            questionText = block.trim();
+        }
+
+        // Nettoyer : enlever le numéro en début (optionnel)
+        questionText = questionText.replace(/^\d+\.\s*/, '');
+        
+        questions.push({
+            question: questionText,
+            answer: answer
+        });
+    }
+
     if (questions.length === 0) {
         alert('Aucune question valide.');
         return;
     }
+
     const mode = modeSelect.value;
     socket.emit('loadQuestions', { roomCode: currentRoomCode, questions, mode });
     quizStatus.textContent = `${questions.length} questions chargées (mode ${mode})`;
