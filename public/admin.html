@@ -73,15 +73,17 @@
             <div class="quiz-controls">
                 <h2>Banque de questions</h2>
                 <textarea id="questionsList" placeholder="Une question par ligne :&#10;Question ? | Réponse"></textarea>
-                <div class="row">
-                    <select id="modeSelect">
+                <div class="row" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+                    <select id="modeSelect" style="padding:8px; border-radius:6px; border:1px solid #0f3460; background:#1a1a2e; color:white; flex:1;">
                         <option value="successive">Successif</option>
                         <option value="random">Aléatoire</option>
                     </select>
                     <button id="loadQuestionsBtn" class="btn-primary" style="flex:0;">Charger</button>
                 </div>
-                <div class="row" style="margin-top:8px;">
-                    <label><input type="checkbox" id="autoNextCheck" checked> Auto-next</label>
+                <div class="row" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px;">
+                    <label style="color:#aaa; font-size:14px; display:flex; align-items:center; gap:6px;">
+                        <input type="checkbox" id="autoNextCheck" checked> Auto-next
+                    </label>
                     <button id="startQuizBtn" class="btn-success" style="flex:1;">Démarrer le quiz</button>
                     <button id="nextQuestionBtn" class="btn-warning" style="flex:1;">Question suivante</button>
                 </div>

@@ -1,5 +1,6 @@
 const socket = io();
 
+// Éléments DOM
 const roomCodeDisplay = document.getElementById('roomCodeDisplay');
 const playersList = document.getElementById('playersList');
 const playerCount = document.getElementById('playerCount');
@@ -17,7 +18,7 @@ const questionTimeInput = document.getElementById('questionTimeInput');
 const applyTimersBtn = document.getElementById('applyTimersBtn');
 const generalTimerValue = document.getElementById('generalTimerValue');
 
-// Éléments banque de questions
+// Éléments de la banque de questions
 const questionsList = document.getElementById('questionsList');
 const modeSelect = document.getElementById('modeSelect');
 const loadQuestionsBtn = document.getElementById('loadQuestionsBtn');
@@ -29,7 +30,7 @@ const quizStatus = document.getElementById('quizStatus');
 let currentRoomCode = null;
 let currentBuzzerId = null;
 
-// Création automatique d'une salle
+// --- Création automatique de la salle ---
 socket.emit('createRoom', 'Admin');
 
 socket.on('roomCreated', ({ roomCode }) => {
@@ -38,7 +39,7 @@ socket.on('roomCreated', ({ roomCode }) => {
     document.title = `Admin - Salle ${roomCode}`;
 });
 
-// Mise à jour des joueurs
+// --- Mise à jour des joueurs ---
 socket.on('playersUpdate', (players) => {
     if (!players || players.length === 0) {
         playersList.innerHTML = '<div style="color:#666;text-align:center;padding:20px;">Aucun joueur</div>';
@@ -63,6 +64,7 @@ socket.on('playersUpdate', (players) => {
     });
     playersList.innerHTML = html;
 
+    // Écouteurs pour les boutons + et -
     document.querySelectorAll('.score-btns button').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -75,13 +77,19 @@ socket.on('playersUpdate', (players) => {
     });
 });
 
-// Mise à jour des timers
+// --- Mise à jour des scores uniquement (optionnel) ---
+socket.on('scoresUpdate', (scores) => {
+    // Les scores sont déjà mis à jour via playersUpdate, donc on ne fait rien ici.
+    // Mais on pourrait raffraîchir si besoin.
+});
+
+// --- Mise à jour des timers ---
 socket.on('timersUpdated', ({ answerTime, questionTime }) => {
     answerTimeInput.value = answerTime;
     questionTimeInput.value = questionTime;
 });
 
-// Tick du timer
+// --- Tick du timer général ---
 socket.on('timerTick', ({ type, remaining }) => {
     if (type === 'general') {
         generalTimerValue.textContent = remaining;
@@ -93,7 +101,7 @@ socket.on('timerTick', ({ type, remaining }) => {
     }
 });
 
-// Nouvelle question (automatique ou manuelle)
+// --- Nouvelle question (automatique ou manuelle) ---
 socket.on('newQuestion', ({ question, isLocked, questionTime, manual }) => {
     buzzAction.style.display = 'none';
     currentBuzzerId = null;
@@ -101,12 +109,11 @@ socket.on('newQuestion', ({ question, isLocked, questionTime, manual }) => {
     generalTimerValue.textContent = questionTime;
     generalTimerValue.style.color = '#f5c842';
     if (!manual) {
-        // Si automatique, on met à jour le statut de la banque
-        quizStatus.textContent = `Question en cours (${question})`;
+        quizStatus.textContent = `Question en cours : "${question}"`;
     }
 });
 
-// Un joueur buzz
+// --- Un joueur buzz ---
 socket.on('playerBuzzed', ({ playerId, playerName }) => {
     buzzPlayerName.textContent = playerName;
     currentBuzzerId = playerId;
@@ -114,7 +121,7 @@ socket.on('playerBuzzed', ({ playerId, playerName }) => {
     buzzStatus.innerHTML = `<div class="winner">${playerName} a buzzé !</div>`;
 });
 
-// Validation
+// --- Validation (bonne réponse) ---
 validateBtn.addEventListener('click', () => {
     if (!currentRoomCode || !currentBuzzerId) return;
     socket.emit('validateBuzz', { roomCode: currentRoomCode, playerId: currentBuzzerId });
@@ -122,7 +129,7 @@ validateBtn.addEventListener('click', () => {
     currentBuzzerId = null;
 });
 
-// Refus
+// --- Refus (mauvaise réponse) ---
 rejectBtn.addEventListener('click', () => {
     if (!currentRoomCode || !currentBuzzerId) return;
     socket.emit('rejectBuzz', { roomCode: currentRoomCode, playerId: currentBuzzerId });
@@ -131,31 +138,31 @@ rejectBtn.addEventListener('click', () => {
     buzzStatus.innerHTML = `<div class="waiting">Réponse refusée. En attente d'un autre buzzer...</div>`;
 });
 
-// Question validée
+// --- Question validée (retour serveur) ---
 socket.on('questionValidated', ({ winnerName, newScore }) => {
     buzzAction.style.display = 'none';
     buzzStatus.innerHTML = `<div class="winner" style="color:#4caf50;">${winnerName} a gagné 1 point (score: ${newScore})</div>`;
 });
 
-// Affichage de la réponse
+// --- Affichage de la réponse ---
 socket.on('showAnswer', ({ answer, winnerName }) => {
     let msg = winnerName ? `${winnerName} a répondu : ` : 'La réponse était : ';
     buzzStatus.innerHTML = `<div class="winner" style="color:#f5c842;">${msg} ${answer}</div>`;
 });
 
-// Question timeout
+// --- Temps écoulé pour la question ---
 socket.on('questionTimeout', () => {
     buzzAction.style.display = 'none';
     buzzStatus.innerHTML = `<div class="waiting" style="color:#e53935;">Temps écoulé. Personne n'a répondu.</div>`;
     generalTimerValue.textContent = '0';
 });
 
-// État des questions chargées
+// --- Confirmation du chargement des questions ---
 socket.on('questionsLoaded', ({ count, mode }) => {
     quizStatus.textContent = `${count} questions chargées, mode ${mode}`;
 });
 
-// Envoyer question manuelle
+// --- Envoyer une question manuelle ---
 sendQuestionBtn.addEventListener('click', () => {
     const question = questionInput.value.trim();
     const answer = answerInput.value.trim();
@@ -166,46 +173,58 @@ sendQuestionBtn.addEventListener('click', () => {
     answerInput.value = '';
 });
 
-// Charger les questions
-loadQuestionsBtn.addEventListener('click', () => {
+// --- Charger les questions depuis le textarea ---
+loadQuestionsBtn.addEventListener('click', function() {
     const text = questionsList.value.trim();
-    if (!text) { alert('Veuillez coller la liste des questions.'); return; }
+    if (!text) {
+        alert('Veuillez coller la liste des questions (une par ligne avec "Question | Réponse").');
+        return;
+    }
     const lines = text.split('\n').filter(l => l.trim() !== '');
     const questions = lines.map(line => {
         const parts = line.split('|').map(s => s.trim());
         return { question: parts[0] || 'Question vide', answer: parts[1] || '' };
     });
-    if (questions.length === 0) { alert('Aucune question valide.'); return; }
+    if (questions.length === 0) {
+        alert('Aucune question valide.');
+        return;
+    }
     const mode = modeSelect.value;
     socket.emit('loadQuestions', { roomCode: currentRoomCode, questions, mode });
     quizStatus.textContent = `${questions.length} questions chargées (mode ${mode})`;
 });
 
-// Démarrer le quiz
-startQuizBtn.addEventListener('click', () => {
-    if (!currentRoomCode) return;
+// --- Démarrer le quiz (première question) ---
+startQuizBtn.addEventListener('click', function() {
+    if (!currentRoomCode) {
+        alert('Pas de salle.');
+        return;
+    }
     socket.emit('startQuiz', { roomCode: currentRoomCode });
 });
 
-// Question suivante (manuel)
-nextQuestionBtn.addEventListener('click', () => {
-    if (!currentRoomCode) return;
+// --- Question suivante (manuel) ---
+nextQuestionBtn.addEventListener('click', function() {
+    if (!currentRoomCode) {
+        alert('Pas de salle.');
+        return;
+    }
     socket.emit('nextQuestion', { roomCode: currentRoomCode });
 });
 
-// Auto-next
-autoNextCheck.addEventListener('change', () => {
+// --- Auto-next (case à cocher) ---
+autoNextCheck.addEventListener('change', function() {
     if (!currentRoomCode) return;
     socket.emit('setAutoNext', { roomCode: currentRoomCode, auto: autoNextCheck.checked });
 });
 
-// Réinitialiser buzzer
+// --- Réinitialiser le buzzer (déverrouillage) ---
 resetBuzzerBtn.addEventListener('click', () => {
     if (!currentRoomCode) return;
     socket.emit('resetBuzzer', { roomCode: currentRoomCode });
 });
 
-// Appliquer timers
+// --- Appliquer les timers ---
 applyTimersBtn.addEventListener('click', () => {
     const answerTime = parseInt(answerTimeInput.value);
     const questionTime = parseInt(questionTimeInput.value);
@@ -215,13 +234,13 @@ applyTimersBtn.addEventListener('click', () => {
     socket.emit('setTimers', { roomCode: currentRoomCode, answerTime, questionTime });
 });
 
-// Gestion de la fermeture
-socket.on('roomClosed', () => {
+// --- Gestion de la fermeture de la salle ---
+socket.on('roomClosed', (msg) => {
     alert('La salle a été fermée.');
     location.reload();
 });
 
-// Gestion des erreurs
+// --- Gestion des messages d'erreur ---
 socket.on('errorMessage', (msg) => {
     alert(msg);
 });
